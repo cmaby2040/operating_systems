@@ -1,0 +1,191 @@
+import java.util.LinkedList;
+import java.util.NoSuchElementException;
+import java.util.Random;
+import java.util.concurrent.Semaphore;
+import java.util.Queue;
+
+public class Assignment2 {
+    public static void main(String[] args){
+        int numUsers = 15; //15
+        int numPrinters = 5; //5
+        int lenQueue = 10; //10
+        PrintManagementCenter PMC = new PrintManagementCenter(lenQueue);
+        User[] userArray = new User[numUsers];
+        Printer[] printerArray = new Printer[numPrinters];
+        
+
+        // 1. Initialize Users and Printers +10
+        for (int i=0; i<numUsers; i++){
+            userArray[i] = new User(i,PMC);
+        }
+        for (int j=0; j<numPrinters; j++){
+            printerArray[j] = new Printer(j,PMC);
+        }
+        for (int z=0; z<numUsers; z++){
+            userArray[z].start();
+        }
+        for (int w=0; w<numPrinters; w++){
+            printerArray[w].start();
+        }
+        // 2. Start Users and Prints Threads +10
+        try {
+            Thread.sleep(30 * 1000);
+        }catch (InterruptedException e){
+            Thread.currentThread().interrupt(); // Here!
+            throw new RuntimeException(e);
+            //System.out.println("Printer Interrupted");
+            //Thread.interrupted();
+        }
+		// Wait for the users and printers
+        for (int z=0; z<numUsers; z++){
+            userArray[z].stop();
+        }
+        for (int w=0; w<numPrinters; w++){
+            printerArray[w].stop();
+        }
+
+        // 3. Shutdown Users and Printers +10
+    }
+}
+
+// No need to change UserFile
+class UserFile{
+    public int timeCost;
+    public int ownerId;
+    public int fileId;
+    public UserFile(int ownerId, int fileId){
+        int minTimeCost = 1000;
+        int maxTimeCost = 2000;
+        Random random = new Random();
+        this.timeCost = random.nextInt(maxTimeCost - minTimeCost + 1) + minTimeCost;
+        this.ownerId = ownerId;
+        this.fileId = fileId;
+        // User will spend some time creating a UserFile
+        int creationTime = random.nextInt(maxTimeCost - minTimeCost + 1) + minTimeCost;
+        try{
+            Thread.sleep(creationTime * 2);
+        }catch (InterruptedException e){
+            Thread.currentThread().interrupt(); // Here!
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+class User extends Thread{
+    private int id;
+    private PrintManagementCenter printManagementCenter;
+
+    public User(int id, PrintManagementCenter printManagementCenter){
+        this.id = id;
+        this.printManagementCenter = printManagementCenter;
+    }
+
+    @Override
+    public void run(){
+        for(int i =0 ; i<4 ; i++){
+            UserFile userFile = new UserFile(this.id, i);
+            printManagementCenter.Upload(userFile);
+            //System.out.println("User: " + this.id + " uploads file #" + i);
+        }
+        // 4. User Loop +10
+    }
+}
+
+class PrintManagementCenter{
+    private Semaphore sem;
+    private Queue<UserFile> q;
+    private Semaphore mutex;
+
+    public PrintManagementCenter(int len){
+        q = new LinkedList<UserFile>();  
+        sem = new Semaphore(len); // this may have to be changed based on the structure of the file waits
+        mutex = new Semaphore(6); // this may have to be changed based on the structure of the file waits 
+        // 5. Create Semaphore, Mutex, and Queue +10
+    }
+
+    public void Upload(UserFile userFile){
+        try {
+           sem.acquire();
+           // System.out.println("number inside upload semaphore: " + sem.availablePermits());
+           mutex.acquire();
+            //System.out.println("entered upload");
+            this.q.add(userFile); //adds elements to the end of the list
+            System.out.println("User: " + userFile.ownerId + " uploads file #" + userFile.fileId);
+            //System.out.println("the curent fileID using peek: "+ this.q.size() +"Mutex constants: " + mutex.availablePermits());
+            mutex.release();
+            //System.out.println("Mutex constants: " + mutex.availablePermits());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Here!
+            throw new RuntimeException(e);
+        }
+    }
+
+    public UserFile Download(){
+        UserFile userfile = null;
+        try {
+            mutex.acquire();
+            //System.out.print("inside the download");
+            while(true){
+                System.out.print("");// i dont know why but this has to be here for the printers to bite.
+                if ((q.size())> 0){
+                    userfile = q.poll();
+                    mutex.release();
+                    break; 
+                }
+            }
+            if(userfile != null ){
+                //System.out.println("download sem relase for user file.");
+                sem.release(); //this removes the first added element
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Here!
+        }
+        return userfile;
+        // 7. Download Function +20
+    }
+
+}
+
+class Printer extends Thread{
+    private PrintManagementCenter printManagementCenter;
+    private int id;
+    public Printer(int id, PrintManagementCenter printManagementCenter){
+        this.id = id;
+        this.printManagementCenter = printManagementCenter;
+    }
+
+    private void print(UserFile userFile){
+        if(userFile == null){
+            return;
+        }
+        System.out.println("Printer#" + this.id +
+                " is printing UserFile#" + userFile.fileId +
+                " for User#" + userFile.ownerId);
+        try {
+            Thread.sleep(userFile.timeCost);
+        }catch (InterruptedException e){
+            Thread.currentThread().interrupt(); // Here!
+            throw new RuntimeException(e);
+            //System.out.println("Printer Interrupted");
+        }
+    }
+    @Override
+    @SuppressWarnings("InfiniteLoopStatement")
+    public void run(){
+        for(;;){
+            //try{
+                UserFile newfile = printManagementCenter.Download();
+                print(newfile);
+                //if (newfile == null){
+                    //System.out.println("broke out printer");
+                    //break;
+                //}
+                
+            //}catch(NoSuchElementException e){
+                //System.out.println("there is no element in the array");
+                //Thread.currentThread().interrupt(); // Here!
+                //throw new RuntimeException(e);  
+            //}
+        }
+    }
+}
